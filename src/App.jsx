@@ -57,7 +57,7 @@ const COLUMN_MAPPING = {
 // API URL
 // --------------------------------------------------
 
-const API_URL = "http://localhost:5000";
+const API_URL = "";
 
 // --------------------------------------------------
 // Main App
