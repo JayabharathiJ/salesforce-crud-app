@@ -55,9 +55,10 @@ const COLUMN_MAPPING = {
 
 // --------------------------------------------------
 // API URL
+// IMPORTANT: This is your DEPLOYED BACKEND URL
 // --------------------------------------------------
 
-const API_URL = "";
+const API_URL = "https://salesforce-crud-app-pq2q.onrender.com";
 
 // --------------------------------------------------
 // Main App
@@ -112,7 +113,10 @@ function App() {
 
     try {
       const response = await fetch(
-        `${API_URL}/api/records/${selectedObject}?offset=0`
+        `${API_URL}/api/records/${selectedObject}?offset=0`,
+        {
+          credentials: "include"
+        }
       );
 
       if (response.status === 401) {
@@ -135,7 +139,6 @@ function App() {
       setHasMore(!data.done);
     } catch (err) {
       console.error("Load records error:", err);
-
       setError(err.message || "Failed to load records");
       setRecords([]);
     } finally {
@@ -156,7 +159,10 @@ function App() {
 
     try {
       const response = await fetch(
-        `${API_URL}/api/records/${selectedObject}?offset=${offset}`
+        `${API_URL}/api/records/${selectedObject}?offset=${offset}`,
+        {
+          credentials: "include"
+        }
       );
 
       if (response.status === 401) {
@@ -189,7 +195,6 @@ function App() {
       }
     } catch (err) {
       console.error("Load more error:", err);
-
       setError(err.message || "Failed to load more records");
     } finally {
       setLoadingMore(false);
@@ -240,6 +245,7 @@ function App() {
           headers: {
             "Content-Type": "application/json"
           },
+          credentials: "include",
           body: JSON.stringify(newRecord)
         }
       );
@@ -266,7 +272,6 @@ function App() {
       await loadInitialRecords();
     } catch (err) {
       console.error("Create error:", err);
-
       alert(`Create failed: ${err.message}`);
     } finally {
       setCreating(false);
@@ -320,6 +325,7 @@ function App() {
           headers: {
             "Content-Type": "application/json"
           },
+          credentials: "include",
           body: JSON.stringify(updateData)
         }
       );
@@ -346,7 +352,6 @@ function App() {
       await loadInitialRecords();
     } catch (err) {
       console.error("Update error:", err);
-
       alert(`Update failed: ${err.message}`);
     } finally {
       setUpdating(false);
@@ -377,7 +382,8 @@ function App() {
       const response = await fetch(
         `${API_URL}/api/records/${selectedObject}/${recordId}`,
         {
-          method: "DELETE"
+          method: "DELETE",
+          credentials: "include"
         }
       );
 
@@ -401,7 +407,6 @@ function App() {
       );
     } catch (err) {
       console.error("Delete error:", err);
-
       alert(`Delete failed: ${err.message}`);
     }
   };
@@ -454,9 +459,7 @@ function App() {
         margin: "0 auto"
       }}
     >
-      {/* -------------------------------------------- */}
       {/* Header */}
-      {/* -------------------------------------------- */}
 
       <div style={{ textAlign: "center" }}>
         <h1
@@ -468,9 +471,7 @@ function App() {
           Salesforce CRUD Application
         </h1>
 
-        {/* ------------------------------------------ */}
         {/* Dropdown + Create */}
-        {/* ------------------------------------------ */}
 
         <div
           style={{
@@ -539,9 +540,7 @@ function App() {
         </h2>
       </div>
 
-      {/* -------------------------------------------- */}
       {/* Loading */}
-      {/* -------------------------------------------- */}
 
       {loading && (
         <div style={{ textAlign: "center" }}>
@@ -549,9 +548,7 @@ function App() {
         </div>
       )}
 
-      {/* -------------------------------------------- */}
       {/* Error */}
-      {/* -------------------------------------------- */}
 
       {error && (
         <div
@@ -566,9 +563,7 @@ function App() {
         </div>
       )}
 
-      {/* -------------------------------------------- */}
       {/* Table */}
-      {/* -------------------------------------------- */}
 
       {!loading && !error && (
         <div
@@ -699,9 +694,7 @@ function App() {
             </tbody>
           </table>
 
-          {/* ---------------------------------------- */}
           {/* Loading More */}
-          {/* ---------------------------------------- */}
 
           {loadingMore && (
             <div
@@ -714,23 +707,25 @@ function App() {
             </div>
           )}
 
-          {!loadingMore && !hasMore && records.length > 0 && (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "15px",
-                color: "#777"
-              }}
-            >
-              No more records.
-            </div>
-          )}
+          {!loadingMore &&
+            !hasMore &&
+            records.length > 0 && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "15px",
+                  color: "#777"
+                }}
+              >
+                No more records.
+              </div>
+            )}
         </div>
       )}
 
-      {/* ================================================== */}
-      {/* CREATE MODAL */}
-      {/* ================================================== */}
+      {/* ==================================================
+          CREATE MODAL
+          ================================================== */}
 
       {showCreateForm && (
         <div
@@ -828,9 +823,9 @@ function App() {
         </div>
       )}
 
-      {/* ================================================== */}
-      {/* VIEW MODAL */}
-      {/* ================================================== */}
+      {/* ==================================================
+          VIEW MODAL
+          ================================================== */}
 
       {viewingRecord && (
         <div
@@ -884,9 +879,9 @@ function App() {
         </div>
       )}
 
-      {/* ================================================== */}
-      {/* EDIT MODAL */}
-      {/* ================================================== */}
+      {/* ==================================================
+          EDIT MODAL
+          ================================================== */}
 
       {showEditForm && editingRecord && (
         <div
@@ -940,9 +935,7 @@ function App() {
                       ? "date"
                       : "text"
                   }
-                  value={
-                    editingRecord[field] ?? ""
-                  }
+                  value={editingRecord[field] ?? ""}
                   onChange={(e) =>
                     handleEditInputChange(
                       field,
