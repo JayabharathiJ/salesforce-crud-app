@@ -1,16 +1,50 @@
-# React + Vite
+# Salesforce CRUD Web Application
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A React and Node.js web application that performs CRUD (Create, Read, Update, Delete) operations on Salesforce standard objects through the Salesforce API.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Salesforce OAuth 2.0 authentication
+- Central object selection dropdown
+- Supports the following Salesforce standard objects:
+  - Account
+  - Opportunity
+  - Lead
+  - Contact
+  - Case
+- View Salesforce records
+- Create new records
+- Edit existing records
+- Delete records
+- Loads 20 records at a time
+- Pagination / loading of additional records
+- React frontend with Node.js backend
+- Salesforce API integration
 
-## React Compiler
+## Technology Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React
+- Vite
+- Node.js
+- Express.js
+- Salesforce REST API
+- OAuth 2.0
 
-## Expanding the Oxlint configuration
+## Project Structure
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```text
+salesforce-crud-app/
+├── public/
+├── server/
+│   └── server.js
+├── src/
+│   ├── App.jsx
+│   ├── App.css
+│   ├── index.css
+│   └── main.jsx
+├── .env
+├── .gitignore
+├── package.json
+├── salesforceConfig.js
+├── index.html
+└── vite.config.js
