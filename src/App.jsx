@@ -58,7 +58,7 @@ const COLUMN_MAPPING = {
 // IMPORTANT: This is your DEPLOYED BACKEND URL
 // --------------------------------------------------
 
-const API_URL = "https://salesforce-crud-app-pq2q.onrender.com";
+const API_URL = "https://salesforce-crud-backend-wtdz.onrender.com";
 
 // --------------------------------------------------
 // Main App
