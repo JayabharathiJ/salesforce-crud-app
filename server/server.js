@@ -28,16 +28,12 @@ console.log("========================================");
 
 console.log(
   "CLIENT ID:",
-  process.env.SALESFORCE_CLIENT_ID
-    ? "Loaded"
-    : "MISSING"
+  process.env.SALESFORCE_CLIENT_ID ? "Loaded" : "MISSING"
 );
 
 console.log(
   "CLIENT SECRET:",
-  process.env.SALESFORCE_CLIENT_SECRET
-    ? "Loaded"
-    : "MISSING"
+  process.env.SALESFORCE_CLIENT_SECRET ? "Loaded" : "MISSING"
 );
 
 console.log(
@@ -50,6 +46,16 @@ console.log(
   process.env.SALESFORCE_LOGIN_URL || "MISSING"
 );
 
+console.log(
+  "FRONTEND URL:",
+  process.env.FRONTEND_URL || "MISSING"
+);
+
+console.log(
+  "NODE ENV:",
+  process.env.NODE_ENV || "development"
+);
+
 console.log("========================================");
 
 // ====================================================
@@ -58,15 +64,26 @@ console.log("========================================");
 
 const app = express();
 
+const isProduction = process.env.NODE_ENV === "production";
+
+const frontendUrl =
+  process.env.FRONTEND_URL || "http://localhost:5173";
+
+const backendUrl =
+  process.env.BACKEND_URL || "http://localhost:5000";
+
+// ====================================================
+// CORS
+// ====================================================
+
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   })
 );
 
 app.use(express.json());
-
 app.use(cookieParser());
 
 // ====================================================
@@ -77,11 +94,8 @@ let salesforceAccessToken = null;
 let salesforceInstanceUrl = null;
 
 // ====================================================
-// PKCE TEMPORARY STORAGE
+// PKCE COOKIE
 // ====================================================
-
-// For a beginner/local project we store the verifier
-// temporarily in an HTTP-only cookie.
 
 const PKCE_COOKIE_NAME = "salesforce_pkce_verifier";
 
@@ -136,7 +150,21 @@ const allowedObjects = {
 // ====================================================
 
 app.get("/", (req, res) => {
-  res.send("Salesforce backend is running!");
+  res.json({
+    success: true,
+    message: "Salesforce backend is running!",
+  });
+});
+
+// ====================================================
+// HEALTH CHECK
+// ====================================================
+
+app.get("/health", (req, res) => {
+  res.json({
+    success: true,
+    status: "OK",
+  });
 });
 
 // ====================================================
@@ -147,19 +175,19 @@ app.get("/auth/login", (req, res) => {
   try {
     if (!process.env.SALESFORCE_LOGIN_URL) {
       return res.status(500).send(
-        "SALESFORCE_LOGIN_URL is missing from .env"
+        "SALESFORCE_LOGIN_URL is missing."
       );
     }
 
     if (!process.env.SALESFORCE_CLIENT_ID) {
       return res.status(500).send(
-        "SALESFORCE_CLIENT_ID is missing from .env"
+        "SALESFORCE_CLIENT_ID is missing."
       );
     }
 
     if (!process.env.SALESFORCE_CALLBACK_URL) {
       return res.status(500).send(
-        "SALESFORCE_CALLBACK_URL is missing from .env"
+        "SALESFORCE_CALLBACK_URL is missing."
       );
     }
 
@@ -189,19 +217,31 @@ app.get("/auth/login", (req, res) => {
       codeVerifier,
       {
         httpOnly: true,
-        secure: false,
-        sameSite: "lax",
+
+        // HTTPS on Render
+        secure: isProduction,
+
+        // Required when frontend/backend are different origins
+        sameSite: isProduction
+          ? "none"
+          : "lax",
+
         maxAge: 10 * 60 * 1000,
+
+        path: "/",
       }
     );
 
     // ------------------------------------------------
-    // Salesforce OAuth URL
+    // Salesforce OAuth parameters
     // ------------------------------------------------
 
     const params = new URLSearchParams();
 
-    params.set("response_type", "code");
+    params.set(
+      "response_type",
+      "code"
+    );
 
     params.set(
       "client_id",
@@ -223,17 +263,24 @@ app.get("/auth/login", (req, res) => {
       "S256"
     );
 
+    // ------------------------------------------------
+    // Build Salesforce login URL
+    // ------------------------------------------------
+
     const loginUrl =
       `${process.env.SALESFORCE_LOGIN_URL}` +
       `/services/oauth2/authorize?` +
       params.toString();
 
     console.log("----------------------------------------");
-    console.log("Opening Salesforce OAuth login...");
+    console.log("Starting Salesforce OAuth login");
     console.log("PKCE enabled");
+    console.log("Production:", isProduction);
+    console.log("Callback:", process.env.SALESFORCE_CALLBACK_URL);
     console.log("----------------------------------------");
 
     res.redirect(loginUrl);
+
   } catch (error) {
     console.error(
       "OAuth login error:",
@@ -253,13 +300,13 @@ app.get("/auth/login", (req, res) => {
 app.get(
   "/auth/callback",
   async (req, res) => {
-    const code = req.query.code;
 
     // ------------------------------------------------
-    // Check Salesforce returned an error
+    // Salesforce OAuth error
     // ------------------------------------------------
 
     if (req.query.error) {
+
       console.error(
         "Salesforce OAuth error:",
         req.query.error,
@@ -275,8 +322,10 @@ app.get(
     }
 
     // ------------------------------------------------
-    // Check authorization code
+    // Authorization code
     // ------------------------------------------------
+
+    const code = req.query.code;
 
     if (!code) {
       return res.status(400).send(
@@ -285,19 +334,30 @@ app.get(
     }
 
     // ------------------------------------------------
-    // Get PKCE verifier
+    // Get PKCE verifier from cookie
     // ------------------------------------------------
 
     const codeVerifier =
       req.cookies[PKCE_COOKIE_NAME];
 
     if (!codeVerifier) {
+
+      console.error(
+        "PKCE verifier cookie was not found."
+      );
+
+      console.error(
+        "Cookies received:",
+        Object.keys(req.cookies)
+      );
+
       return res.status(400).send(
         "PKCE code verifier was not found. Please start the Salesforce login again."
       );
     }
 
     try {
+
       // ------------------------------------------------
       // Token request
       // ------------------------------------------------
@@ -319,10 +379,13 @@ app.get(
         process.env.SALESFORCE_CLIENT_ID
       );
 
-      params.set(
-        "client_secret",
-        process.env.SALESFORCE_CLIENT_SECRET
-      );
+      // Salesforce connected app secret
+      if (process.env.SALESFORCE_CLIENT_SECRET) {
+        params.set(
+          "client_secret",
+          process.env.SALESFORCE_CLIENT_SECRET
+        );
+      }
 
       params.set(
         "redirect_uri",
@@ -330,15 +393,14 @@ app.get(
       );
 
       // IMPORTANT:
-      // Send PKCE verifier back to Salesforce
-
+      // Send the original PKCE verifier
       params.set(
         "code_verifier",
         codeVerifier
       );
 
       // ------------------------------------------------
-      // Exchange code for token
+      // Exchange authorization code for token
       // ------------------------------------------------
 
       const response = await axios.post(
@@ -367,7 +429,15 @@ app.get(
       // ------------------------------------------------
 
       res.clearCookie(
-        PKCE_COOKIE_NAME
+        PKCE_COOKIE_NAME,
+        {
+          httpOnly: true,
+          secure: isProduction,
+          sameSite: isProduction
+            ? "none"
+            : "lax",
+          path: "/",
+        }
       );
 
       console.log("");
@@ -387,8 +457,10 @@ app.get(
       // Return to React
       // ------------------------------------------------
 
-      res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
+      res.redirect(frontendUrl);
+
     } catch (error) {
+
       console.error("");
       console.error(
         "========================================"
@@ -402,7 +474,7 @@ app.get(
 
       console.error(
         error.response?.data ||
-          error.message
+        error.message
       );
 
       console.error(
@@ -423,6 +495,7 @@ app.get(
 app.get(
   "/auth/status",
   (req, res) => {
+
     res.json({
       connected:
         !!salesforceAccessToken &&
@@ -438,11 +511,20 @@ app.get(
 app.get(
   "/auth/logout",
   (req, res) => {
+
     salesforceAccessToken = null;
     salesforceInstanceUrl = null;
 
     res.clearCookie(
-      PKCE_COOKIE_NAME
+      PKCE_COOKIE_NAME,
+      {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction
+          ? "none"
+          : "lax",
+        path: "/",
+      }
     );
 
     res.json({
@@ -458,10 +540,12 @@ app.get(
 // ====================================================
 
 function checkSalesforceConnection(res) {
+
   if (
     !salesforceAccessToken ||
     !salesforceInstanceUrl
   ) {
+
     res.status(401).json({
       error:
         "Not connected to Salesforce. Please login first.",
@@ -480,6 +564,7 @@ function checkSalesforceConnection(res) {
 app.get(
   "/api/records/:objectName",
   async (req, res) => {
+
     if (!checkSalesforceConnection(res)) {
       return;
     }
@@ -492,6 +577,7 @@ app.get(
     // ------------------------------------------------
 
     if (!allowedObjects[objectName]) {
+
       return res.status(400).json({
         error:
           "Invalid Salesforce object.",
@@ -508,11 +594,15 @@ app.get(
     let offset =
       parseInt(req.query.offset, 10) || 0;
 
-    // Always maximum 20
-    limit = Math.min(limit, 20);
+    limit = Math.min(
+      Math.max(limit, 1),
+      20
+    );
 
-    // Prevent negative offset
-    offset = Math.max(offset, 0);
+    offset = Math.max(
+      offset,
+      0
+    );
 
     // ------------------------------------------------
     // Fields
@@ -532,6 +622,7 @@ app.get(
       `OFFSET ${offset}`;
 
     try {
+
       console.log(
         `GET ${objectName} | limit=${limit} | offset=${offset}`
       );
@@ -562,11 +653,13 @@ app.get(
         limit,
         offset,
       });
+
     } catch (error) {
+
       console.error(
         "Salesforce GET error:",
         error.response?.data ||
-          error.message
+        error.message
       );
 
       res.status(
@@ -587,6 +680,7 @@ app.get(
 app.post(
   "/api/records/:objectName",
   async (req, res) => {
+
     if (!checkSalesforceConnection(res)) {
       return;
     }
@@ -599,6 +693,7 @@ app.post(
     // ------------------------------------------------
 
     if (!allowedObjects[objectName]) {
+
       return res.status(400).json({
         error:
           "Invalid Salesforce object.",
@@ -619,6 +714,7 @@ app.post(
     delete data.CaseNumber;
 
     try {
+
       console.log(
         `CREATE ${objectName}`,
         data
@@ -646,11 +742,13 @@ app.post(
         message:
           `${objectName} created successfully.`,
       });
+
     } catch (error) {
+
       console.error(
         "Salesforce CREATE error:",
         error.response?.data ||
-          error.message
+        error.message
       );
 
       res.status(
@@ -671,6 +769,7 @@ app.post(
 app.put(
   "/api/records/:objectName/:recordId",
   async (req, res) => {
+
     if (!checkSalesforceConnection(res)) {
       return;
     }
@@ -686,6 +785,7 @@ app.put(
     // ------------------------------------------------
 
     if (!allowedObjects[objectName]) {
+
       return res.status(400).json({
         error:
           "Invalid Salesforce object.",
@@ -705,6 +805,7 @@ app.put(
     delete data.CaseNumber;
 
     try {
+
       console.log(
         `UPDATE ${objectName}/${recordId}`,
         data
@@ -729,11 +830,13 @@ app.put(
         message:
           `${objectName} updated successfully.`,
       });
+
     } catch (error) {
+
       console.error(
         "Salesforce UPDATE error:",
         error.response?.data ||
-          error.message
+        error.message
       );
 
       res.status(
@@ -754,6 +857,7 @@ app.put(
 app.delete(
   "/api/records/:objectName/:recordId",
   async (req, res) => {
+
     if (!checkSalesforceConnection(res)) {
       return;
     }
@@ -769,6 +873,7 @@ app.delete(
     // ------------------------------------------------
 
     if (!allowedObjects[objectName]) {
+
       return res.status(400).json({
         error:
           "Invalid Salesforce object.",
@@ -776,6 +881,7 @@ app.delete(
     }
 
     try {
+
       console.log(
         `DELETE ${objectName}/${recordId}`
       );
@@ -795,11 +901,13 @@ app.delete(
         message:
           `${objectName} deleted successfully.`,
       });
+
     } catch (error) {
+
       console.error(
         "Salesforce DELETE error:",
         error.response?.data ||
-          error.message
+        error.message
       );
 
       res.status(
@@ -817,17 +925,26 @@ app.delete(
 // START SERVER
 // ====================================================
 
-const PORT = process.env.PORT || 5000;
+const PORT =
+  process.env.PORT || 5000;
+
 app.listen(
   PORT,
   () => {
+
     console.log("");
     console.log(
       "========================================"
     );
+
     console.log(
-      `Salesforce backend running at http://localhost:${PORT}`
+      `Salesforce backend running on port ${PORT}`
     );
+
+    console.log(
+      `Backend URL: ${backendUrl}`
+    );
+
     console.log(
       "========================================"
     );
